@@ -7,6 +7,40 @@ const MASTERY_RADIUS = [5, 6.5, 8, 9.5, 11];
 // in the layout but no line is drawn (keeps the map from becoming a hairball).
 const VISIBLE_SHARED_TAGS = 2;
 
+// Map labels are shortened so long paper titles don't overlap each other;
+// the tooltip and side panel still show the full title. Known seed titles
+// get a hand-picked abbreviation (better than any generic heuristic); custom
+// stars fall back to their first couple of significant words.
+const SHORT_LABELS = {
+  "A Material Point Method for Snow Simulation": "MPM Snow",
+  "Material Point Method (MPM)": "MPM",
+  "The Particle-in-Cell Method for Fluid Dynamics": "PIC",
+  "FLIP: A Method for Adaptively Zoned Particle-in-Cell Calculations": "FLIP",
+  "PIC/FLIP Transfer Schemes": "PIC/FLIP",
+  "Animating Sand as a Fluid": "Animating Sand",
+  "Stable Fluids": "Stable Fluids",
+  "Navier-Stokes Discretization": "Navier-Stokes",
+  "Eulerian vs Lagrangian Methods": "Eulerian/Lagrangian",
+  "Smoothed Particle Hydrodynamics: Theory and Application to Non-Spherical Stars": "SPH (orig. 1977)",
+  "Smoothed Particle Hydrodynamics (SPH)": "SPH",
+  "Position Based Fluids": "Position Based Fluids",
+  "Finite Element Method (FEM)": "FEM",
+  "Taichi: A Language for High-Performance Computation on Spatially Sparse Data Structures": "Taichi",
+  "ChainQueen: A Real-Time Differentiable Physical Simulator for Soft Robotics": "ChainQueen",
+  "DiffTaichi: Differentiable Programming for Physical Simulation": "DiffTaichi",
+  "Learning to Simulate Complex Physics with Graph Networks": "Learning to Simulate (GNS)",
+  "Differentiable Simulation": "Differentiable Sim",
+  "Neural / Learning-Based Simulation": "Neural Sim",
+};
+
+const STOP_WORDS = new Set(["a", "an", "the", "of", "for", "on", "in", "to", "with", "and", "vs"]);
+
+function shortLabel(title) {
+  if (SHORT_LABELS[title]) return SHORT_LABELS[title];
+  const words = title.split(/\s+/).filter((w) => !STOP_WORDS.has(w.toLowerCase()));
+  return (words.length ? words : title.split(/\s+/)).slice(0, 2).join(" ");
+}
+
 const state = {
   nodes: [],
   tags: [],
@@ -193,7 +227,7 @@ function renderStarmap() {
   nodeSel.append("text")
     .attr("dx", (d) => MASTERY_RADIUS[d.mastery] + 5)
     .attr("dy", 4)
-    .text((d) => d.title);
+    .text((d) => shortLabel(d.title));
 
   nodeSel.on("click", (event, d) => {
     state.selectedId = d.id;
