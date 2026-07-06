@@ -5,18 +5,6 @@ from pathlib import Path
 DB_PATH = Path(__file__).resolve().parent.parent / "achievements.db"
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS achievements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    domain TEXT NOT NULL DEFAULT 'research',
-    tags TEXT NOT NULL DEFAULT '[]',
-    tier TEXT NOT NULL CHECK(tier IN ('bronze','silver','gold','platinum')),
-    unlocked INTEGER NOT NULL DEFAULT 0,
-    unlocked_at TEXT,
-    custom INTEGER NOT NULL DEFAULT 0
-);
-
 -- Star map nodes: a paper or a knowledge point, both are just stars.
 -- Relationships in v1 are implied by shared tags only (Jaccard similarity,
 -- computed on read) -- no edges table yet.
@@ -45,37 +33,15 @@ def init_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        # The achievement wall was retired in favor of star mastery -- drop
+        # its table (confirmed empty of any real unlocked/custom progress).
+        conn.execute("DROP TABLE IF EXISTS achievements")
         conn.commit()
-        row = conn.execute("SELECT COUNT(*) AS c FROM achievements").fetchone()
-        if row["c"] == 0:
-            _seed_achievements(conn)
         row = conn.execute("SELECT COUNT(*) AS c FROM nodes").fetchone()
         if row["c"] == 0:
             _seed_nodes(conn)
     finally:
         conn.close()
-
-
-def _seed_achievements(conn: sqlite3.Connection) -> None:
-    from seed_data import SEED_ACHIEVEMENTS
-
-    conn.executemany(
-        """
-        INSERT INTO achievements (title, description, domain, tags, tier, unlocked, unlocked_at, custom)
-        VALUES (:title, :description, :domain, :tags, :tier, 0, NULL, 0)
-        """,
-        [
-            {
-                "title": a["title"],
-                "description": a["description"],
-                "domain": a.get("domain", "research"),
-                "tags": json.dumps(a["tags"]),
-                "tier": a["tier"],
-            }
-            for a in SEED_ACHIEVEMENTS
-        ],
-    )
-    conn.commit()
 
 
 def _seed_nodes(conn: sqlite3.Connection) -> None:

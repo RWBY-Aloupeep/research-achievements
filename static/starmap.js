@@ -131,7 +131,15 @@ const el = {
   formDescription: document.getElementById("form-description"),
   formTags: document.getElementById("form-tags"),
   formUrl: document.getElementById("form-url"),
+  masteryGuideToggle: document.getElementById("mastery-guide-toggle"),
+  masteryGuideBody: document.getElementById("mastery-guide-body"),
+  masteryGuideHint: document.getElementById("mastery-guide-hint"),
 };
+
+el.masteryGuideToggle.addEventListener("click", () => {
+  const collapsed = el.masteryGuideBody.classList.toggle("hidden");
+  el.masteryGuideHint.textContent = collapsed ? "what do these mean? ↓" : "hide ↑";
+});
 
 let svg, container, simulation, nodeSel, linkSel, haloSel;
 

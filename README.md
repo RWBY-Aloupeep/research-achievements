@@ -1,8 +1,13 @@
 # research-achievements
 
-A personal research-management tool: an achievement wall for the `research` domain, plus a
-"star map" knowledge visualization where papers and concepts are stars that light up as you
-learn them.
+A personal research-management tool: a "star map" where papers and concepts are stars that
+light up as you learn them.
+
+This started as two separate things — an achievement wall (discrete unlock/lock milestones) and
+a star map (5-level mastery per paper/concept). The achievement wall was retired: almost every
+achievement was really just "understand/build/reproduce one specific thing," which a star's
+mastery level already expresses more precisely, per-paper, on a finer scale. The star map is now
+the whole app.
 
 ## Setup
 
@@ -12,9 +17,9 @@ python3 -m venv venv
 ./venv/bin/uvicorn main:app --app-dir backend --reload --port 8000
 ```
 
-Then open `http://localhost:8000` (achievement wall) or `http://localhost:8000/static/starmap.html`
-(star map). SQLite data lives in `achievements.db` at the project root (gitignored) and is
-seeded automatically on first run.
+Then open `http://localhost:8000`. SQLite data lives in `achievements.db` at the project root
+(gitignored, name is a holdover from the retired achievement wall) and is seeded automatically
+on first run.
 
 ## Star map
 
@@ -39,3 +44,5 @@ here.
 - Per-tag completion (shown next to the tag filter once a tag is active) reuses the same overall
   "sky illuminated" formula (`sum(mastery) / (4 * count)`) restricted to the filtered stars,
   rather than a separate stat.
+- The mastery-level guide (what 0-4 actually mean) is a collapsed-by-default section rather than
+  always-on text, so it doesn't compete with the map for attention once you know it by heart.

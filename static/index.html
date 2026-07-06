@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>research :: achievement wall</title>
+<title>research :: star map</title>
 <link rel="stylesheet" href="/static/style.css">
+<script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
 <div class="grid-bg"></div>
@@ -12,55 +13,73 @@
 <header class="topbar">
   <div class="brand">
     <span class="brand-glyph">&gt;_</span>
-    <span class="brand-text">research<span class="brand-domain">/achievements</span></span>
+    <span class="brand-text">research<span class="brand-domain">/star-map</span></span>
   </div>
-  <nav class="topnav">
-    <a href="/static/starmap.html" class="nav-link">star map</a>
-  </nav>
   <div class="domain-tag">domain: <span>research</span></div>
 </header>
 
 <main class="wrap">
   <section class="convergence-panel">
     <div class="convergence-row">
-      <div class="convergence-label">completion</div>
-      <div class="convergence-value" id="percent-value">0.00%</div>
+      <div class="convergence-label">sky illuminated</div>
+      <div class="convergence-value" id="sky-percent">0.00%</div>
     </div>
     <div class="progress-track">
-      <div class="progress-fill" id="progress-fill"></div>
+      <div class="progress-fill" id="sky-progress-fill"></div>
     </div>
-    <div class="convergence-meta">
-      <span id="unlocked-count">0</span>/<span id="total-count">0</span> unlocked
+    <div class="convergence-meta" id="sky-meta">0 stars charted</div>
+  </section>
+
+  <section class="mastery-guide">
+    <button class="mastery-guide-toggle" id="mastery-guide-toggle">
+      <span class="mastery-legend-inline">
+        <span class="legend-item"><span class="legend-dot m0"></span>0 unlit</span>
+        <span class="legend-item"><span class="legend-dot m1"></span>1 glimmer</span>
+        <span class="legend-item"><span class="legend-dot m2"></span>2 shine</span>
+        <span class="legend-item"><span class="legend-dot m3"></span>3 bright</span>
+        <span class="legend-item"><span class="legend-dot m4"></span>4 blazing</span>
+      </span>
+      <span class="mastery-guide-hint" id="mastery-guide-hint">what do these mean? &darr;</span>
+    </button>
+    <div class="mastery-guide-body hidden" id="mastery-guide-body">
+      <div class="mastery-guide-row"><span class="legend-dot m0"></span><div><strong>0 &mdash; unlit.</strong> Just added to the map. Not read yet.</div></div>
+      <div class="mastery-guide-row"><span class="legend-dot m1"></span><div><strong>1 &mdash; glimmer.</strong> Read it. Can state in one sentence what problem it solves.</div></div>
+      <div class="mastery-guide-row"><span class="legend-dot m2"></span><div><strong>2 &mdash; shine.</strong> Can explain the core idea of the method to someone else.</div></div>
+      <div class="mastery-guide-row"><span class="legend-dot m3"></span><div><strong>3 &mdash; bright.</strong> Can walk through the key technical path &mdash; main derivations/design decisions &mdash; and name its limitations.</div></div>
+      <div class="mastery-guide-row"><span class="legend-dot m4"></span><div><strong>4 &mdash; blazing.</strong> Reproduced it, or used it in your own work.</div></div>
+      <p class="mastery-guide-note">Each level should be self-verifiable in a day. Star size reflects how many other stars it's connected to (shared tags); color comes from its most distinctive tag. Only brightness reflects mastery.</p>
     </div>
   </section>
 
   <section class="controls">
-    <div class="tag-filter" id="tag-filter"></div>
-    <button class="btn btn-add" id="open-add-form">+ new achievement</button>
+    <div class="tag-filter grouped" id="tag-filter"></div>
+    <button class="btn btn-add" id="open-add-form">+ new star</button>
   </section>
 
   <section class="add-form hidden" id="add-form">
-    <h2>register new achievement</h2>
+    <h2 id="add-form-title">chart new star</h2>
     <div class="form-row">
       <label>title</label>
-      <input type="text" id="form-title" placeholder="e.g. Derive a weak form by hand">
+      <input type="text" id="form-title" placeholder="e.g. Position Based Fluids">
     </div>
     <div class="form-row">
-      <label>description</label>
-      <textarea id="form-description" placeholder="what makes this verifiably done?"></textarea>
+      <label>kind</label>
+      <select id="form-kind">
+        <option value="paper">paper</option>
+        <option value="concept">concept</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>description <span class="hint">(optional)</span></label>
+      <textarea id="form-description" placeholder="one-line summary / notes"></textarea>
     </div>
     <div class="form-row">
       <label>tags <span class="hint">(comma separated)</span></label>
-      <input type="text" id="form-tags" placeholder="pde, numerical-methods">
+      <input type="text" id="form-tags" placeholder="sph, particle, fluids">
     </div>
     <div class="form-row">
-      <label>tier</label>
-      <select id="form-tier">
-        <option value="bronze">bronze</option>
-        <option value="silver">silver</option>
-        <option value="gold">gold</option>
-        <option value="platinum">platinum</option>
-      </select>
+      <label>url <span class="hint">(optional)</span></label>
+      <input type="text" id="form-url" placeholder="arXiv / DOI / project page">
     </div>
     <div class="form-actions">
       <button class="btn btn-cancel" id="cancel-add-form">cancel</button>
@@ -68,9 +87,14 @@
     </div>
   </section>
 
-  <section class="grid" id="achievement-grid"></section>
+  <div class="starmap-layout">
+    <div class="starmap-canvas" id="starmap-canvas"></div>
+    <div class="side-panel hidden" id="side-panel"></div>
+  </div>
 </main>
 
-<script src="/static/app.js"></script>
+<div class="node-tooltip" id="node-tooltip"></div>
+
+<script src="/static/starmap.js"></script>
 </body>
 </html>
