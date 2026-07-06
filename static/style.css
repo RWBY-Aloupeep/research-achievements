@@ -382,6 +382,23 @@ html, body {
 .star-node.selected text { fill: var(--text); }
 .star-link { stroke: var(--border-bright); stroke-opacity: 0.35; }
 
+.region-boundary {
+  fill: none;
+  stroke: var(--border-bright);
+  stroke-width: 1px;
+  stroke-dasharray: 3 7;
+  opacity: 0.18;
+}
+.region-label {
+  fill: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  text-anchor: middle;
+  opacity: 0.55;
+}
+
 .mastery-legend {
   display: flex;
   flex-wrap: wrap;
