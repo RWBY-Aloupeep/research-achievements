@@ -7,7 +7,6 @@ const state = {
 const el = {
   grid: document.getElementById("achievement-grid"),
   tagFilter: document.getElementById("tag-filter"),
-  residualValue: document.getElementById("residual-value"),
   progressFill: document.getElementById("progress-fill"),
   unlockedCount: document.getElementById("unlocked-count"),
   totalCount: document.getElementById("total-count"),
@@ -32,11 +31,6 @@ async function fetchJSON(url, opts) {
   return res.json();
 }
 
-function formatResidual(residual) {
-  if (residual <= 0) return "0.000e+0";
-  return residual.toExponential(3).replace("e", "e");
-}
-
 async function loadAll() {
   const [achievements, tags] = await Promise.all([
     fetchJSON("/api/achievements"),
@@ -51,7 +45,6 @@ async function loadAll() {
 
 async function refreshStats() {
   const stats = await fetchJSON("/api/stats");
-  el.residualValue.textContent = formatResidual(stats.residual);
   el.progressFill.style.width = `${stats.percent}%`;
   el.unlockedCount.textContent = stats.unlocked;
   el.totalCount.textContent = stats.total;

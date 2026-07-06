@@ -97,9 +97,6 @@ html, body {
   letter-spacing: 0.02em;
   transition: color 0.3s ease;
 }
-.convergence-arrow { color: var(--text-dim); font-size: 18px; }
-.convergence-target { font-size: 20px; color: var(--text); }
-
 .progress-track {
   height: 8px;
   background: #060a0f;
