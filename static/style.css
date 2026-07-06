@@ -397,12 +397,14 @@ html, body {
   color: var(--text-dim);
 }
 .mastery-legend .legend-item { display: flex; align-items: center; gap: 6px; }
+/* A star's actual hue varies per star (see starHue in starmap.js); this
+   legend uses one fixed neutral hue purely to show the brightness ramp. */
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.legend-dot.m0 { background: #4a5a63; }
-.legend-dot.m1 { background: #9fb4bd; }
-.legend-dot.m2 { background: #39ffc9; }
-.legend-dot.m3 { background: #7fd8ff; }
-.legend-dot.m4 { background: #ffe9a8; box-shadow: 0 0 6px 1px rgba(255,233,168,0.7); }
+.legend-dot.m0 { background: hsl(210, 10%, 20%); }
+.legend-dot.m1 { background: hsl(210, 28%, 34%); }
+.legend-dot.m2 { background: hsl(210, 45%, 50%); }
+.legend-dot.m3 { background: hsl(210, 62%, 66%); }
+.legend-dot.m4 { background: hsl(210, 78%, 85%); box-shadow: 0 0 6px 1px hsla(210, 78%, 85%, 0.7); }
 
 .side-panel {
   position: absolute;
@@ -486,10 +488,10 @@ html, body {
   transition: all 0.15s ease;
 }
 .mastery-dot:hover { border-color: var(--accent); }
-.mastery-dot.filled.m1 { background: #9fb4bd; border-color: #9fb4bd; }
-.mastery-dot.filled.m2 { background: #39ffc9; border-color: #39ffc9; }
-.mastery-dot.filled.m3 { background: #7fd8ff; border-color: #7fd8ff; }
-.mastery-dot.filled.m4 { background: #ffe9a8; border-color: #ffe9a8; box-shadow: 0 0 8px 1px rgba(255,233,168,0.6); }
+.mastery-dot.filled.m1 { background: hsl(210, 28%, 34%); border-color: hsl(210, 28%, 34%); }
+.mastery-dot.filled.m2 { background: hsl(210, 45%, 50%); border-color: hsl(210, 45%, 50%); }
+.mastery-dot.filled.m3 { background: hsl(210, 62%, 66%); border-color: hsl(210, 62%, 66%); }
+.mastery-dot.filled.m4 { background: hsl(210, 78%, 85%); border-color: hsl(210, 78%, 85%); box-shadow: 0 0 8px 1px hsla(210, 78%, 85%, 0.6); }
 .mastery-name { font-size: 11px; color: var(--text); }
 
 .side-panel-actions {

@@ -1,10 +1,58 @@
 const MASTERY_NAMES = ["unlit", "glimmer", "shine", "bright", "blazing"];
-const MASTERY_COLORS = ["#4a5a63", "#9fb4bd", "#39ffc9", "#7fd8ff", "#ffe9a8"];
-const MASTERY_RADIUS = [5, 6.5, 8, 9.5, 11];
+
+// Mastery is purely a brightness dimension now, not a hue -- a star's color
+// stays fixed (see starHue below) while its saturation/lightness climb as it
+// gets more mastered, the way a dim star looks grayish and a bright one shows
+// vivid color to the eye.
+const MASTERY_SATURATION = [10, 28, 45, 62, 78];
+const MASTERY_LIGHTNESS = [20, 34, 50, 66, 85];
+
 // How far each mastery level's light reaches into the surrounding dark
 // background -- a real night sky, not just a bigger dot. Unlit stars cast no
 // glow at all; blazing stars visibly illuminate the space around them.
 const GLOW_RADIUS = [0, 16, 32, 52, 78];
+const GLOW_INNER_OPACITY = [0, 0.5, 0.62, 0.76, 0.92];
+const GLOW_MID_OPACITY = [0, 0.18, 0.24, 0.3, 0.38];
+
+// Star size reflects how connected it is (how many constellation lines touch
+// it), not mastery -- a well-linked hub reads as a bigger star regardless of
+// how mastered it is.
+const CORE_RADIUS_MIN = 4.5;
+const CORE_RADIUS_SCALE = 3;
+const CORE_RADIUS_MAX = 15;
+
+function coreRadius(degree) {
+  return Math.min(CORE_RADIUS_MIN + Math.sqrt(degree) * CORE_RADIUS_SCALE, CORE_RADIUS_MAX);
+}
+
+// Star color (hue) comes from its most distinctive tag -- the least common
+// one it carries, hashed to a hue -- so related stars tend toward similar
+// colors without any hand-picked category or region boundary.
+function hashTag(tag) {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
+function tagFrequency(nodes) {
+  const freq = {};
+  nodes.forEach((n) => n.tags.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
+  return freq;
+}
+
+function starHue(node, freq) {
+  if (!node.tags.length) return 200;
+  const distinctiveTag = node.tags.reduce((best, t) => (freq[t] < freq[best] ? t : best), node.tags[0]);
+  return hashTag(distinctiveTag) % 360;
+}
+
+function starColor(hue, mastery) {
+  return `hsl(${hue}, ${MASTERY_SATURATION[mastery]}%, ${MASTERY_LIGHTNESS[mastery]}%)`;
+}
+
+function glowColor(hue) {
+  return `hsl(${hue}, 65%, 68%)`;
+}
 
 // A pair of stars is drawn as a visible "constellation" link once they share
 // at least this many tags; below that, tag overlap still pulls them together
@@ -193,16 +241,7 @@ function renderStarmap() {
     d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => container.attr("transform", event.transform))
   );
 
-  // One radial gradient per mastery level -- a soft falloff from the star's
-  // color to fully transparent, so brighter stars visibly light up the dark
-  // space around them instead of just being drawn bigger.
   const defs = svg.append("defs");
-  MASTERY_COLORS.forEach((color, level) => {
-    const gradient = defs.append("radialGradient").attr("id", `star-glow-${level}`);
-    gradient.append("stop").attr("offset", "0%").attr("stop-color", color).attr("stop-opacity", 0.75);
-    gradient.append("stop").attr("offset", "45%").attr("stop-color", color).attr("stop-opacity", 0.28);
-    gradient.append("stop").attr("offset", "100%").attr("stop-color", color).attr("stop-opacity", 0);
-  });
   // Softens the gradient's stop edges into a proper bloom rather than a
   // visible ring, and (combined with "screen" blending below) lets several
   // nearby glows melt into one continuously lit patch of sky.
@@ -213,11 +252,37 @@ function renderStarmap() {
   const links = buildLinks(nodes);
   const visibleLinks = links.filter((l) => l.visible);
 
+  // Degree (how many constellation lines touch a star) drives its size;
+  // computed here while link.source/target are still plain ids, before
+  // d3.forceLink resolves them into node object references below.
+  const degreeById = {};
+  nodes.forEach((n) => { degreeById[n.id] = 0; });
+  visibleLinks.forEach((l) => {
+    degreeById[l.source] += 1;
+    degreeById[l.target] += 1;
+  });
+  const freq = tagFrequency(nodes);
+  nodes.forEach((n) => {
+    n.radius = coreRadius(degreeById[n.id] || 0);
+    n.hue = starHue(n, freq);
+  });
+
+  // One radial gradient per star (color is per-star via its hue; only
+  // opacity/radius scale with mastery).
+  nodes.forEach((n) => {
+    const gradient = defs.append("radialGradient").attr("id", `star-glow-${n.id}`);
+    gradient.append("stop").attr("class", "glow-stop-inner").attr("offset", "0%")
+      .attr("stop-color", glowColor(n.hue)).attr("stop-opacity", GLOW_INNER_OPACITY[n.mastery]);
+    gradient.append("stop").attr("class", "glow-stop-mid").attr("offset", "45%")
+      .attr("stop-color", glowColor(n.hue)).attr("stop-opacity", GLOW_MID_OPACITY[n.mastery]);
+    gradient.append("stop").attr("offset", "100%").attr("stop-color", glowColor(n.hue)).attr("stop-opacity", 0);
+  });
+
   simulation = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 220 - d.similarity * 160).strength((d) => d.similarity * 0.7))
     .force("charge", d3.forceManyBody().strength(-220))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collide", d3.forceCollide(24));
+    .force("collide", d3.forceCollide((d) => d.radius + 12));
 
   // All halos live on one shared bottom layer, behind links and star points,
   // with "screen" blending (see CSS) so overlapping glows from nearby lit
@@ -230,7 +295,7 @@ function renderStarmap() {
     .join("circle")
     .attr("class", "star-halo")
     .attr("r", (d) => GLOW_RADIUS[d.mastery])
-    .attr("fill", (d) => `url(#star-glow-${d.mastery})`);
+    .attr("fill", (d) => `url(#star-glow-${d.id})`);
 
   linkSel = container.append("g")
     .selectAll("line")
@@ -248,11 +313,11 @@ function renderStarmap() {
 
   nodeSel.append("circle")
     .attr("class", "star-core")
-    .attr("r", (d) => MASTERY_RADIUS[d.mastery])
-    .attr("fill", (d) => MASTERY_COLORS[d.mastery]);
+    .attr("r", (d) => d.radius)
+    .attr("fill", (d) => starColor(d.hue, d.mastery));
 
   nodeSel.append("text")
-    .attr("dx", (d) => MASTERY_RADIUS[d.mastery] + 5)
+    .attr("dx", (d) => d.radius + 5)
     .attr("dy", 4)
     .text((d) => shortLabel(d.title));
 
@@ -307,16 +372,23 @@ function lightUpAnimation(nodeId) {
   if (!nodeSel) return;
   const group = nodeSel.filter((d) => d.id === nodeId);
   const datum = group.datum();
-  const targetR = MASTERY_RADIUS[datum.mastery];
-  const targetColor = MASTERY_COLORS[datum.mastery];
+  const targetR = datum.radius; // size is fixed by connection count, unaffected by mastery
+  const targetColor = starColor(datum.hue, datum.mastery);
   const targetGlowR = GLOW_RADIUS[datum.mastery];
 
   group.select(".star-core")
-    .transition().duration(120).attr("r", targetR * 2).attr("fill", targetColor)
+    .transition().duration(120).attr("r", targetR * 1.6).attr("fill", targetColor)
     .transition().duration(280).attr("r", targetR);
 
+  const gradient = svg.select(`#star-glow-${nodeId}`);
+  gradient.select(".glow-stop-inner")
+    .transition().duration(300)
+    .attr("stop-opacity", GLOW_INNER_OPACITY[datum.mastery]);
+  gradient.select(".glow-stop-mid")
+    .transition().duration(300)
+    .attr("stop-opacity", GLOW_MID_OPACITY[datum.mastery]);
+
   haloSel.filter((d) => d.id === nodeId)
-    .attr("fill", `url(#star-glow-${datum.mastery})`)
     .transition().duration(120).attr("r", targetGlowR * 1.3)
     .transition().duration(400).attr("r", targetGlowR);
 
