@@ -151,6 +151,23 @@ html, body {
   flex-wrap: wrap;
   gap: 8px;
 }
+.tag-filter.grouped {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+}
+
+.tag-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.tag-group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  width: 132px;
+  flex-shrink: 0;
+}
+.tag-group-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .tag-chip {
   font-size: 12px;

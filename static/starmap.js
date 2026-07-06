@@ -1,5 +1,17 @@
 const MASTERY_NAMES = ["unlit", "glimmer", "shine", "bright", "blazing"];
 
+// Curated grouping for the tag filter bar only -- doesn't touch the data
+// model (tags stay flat/multi-valued on each node) or star layout, purely an
+// aid for scanning ~20+ tags. Tags not listed here (e.g. from custom stars)
+// fall into an "other" group automatically.
+const TAG_CATEGORIES = {
+  "simulation paradigms": ["eulerian", "lagrangian", "hybrid", "mpm", "sph", "pic", "flip", "particle", "simulation"],
+  "numerical methods": ["discretization", "grid", "pde", "navier-stokes", "fem", "position-based"],
+  "materials & phenomena": ["fluids", "snow", "sand", "elasticity", "soft-robotics"],
+  "learning-based": ["differentiable", "neural", "learning-based", "graph-networks", "dsl", "sparse", "gradient"],
+};
+const TAG_CATEGORY_ORDER = Object.keys(TAG_CATEGORIES);
+
 // Mastery is purely a brightness dimension now, not a hue -- a star's color
 // stays fixed (see starHue below) while its saturation/lightness climb as it
 // gets more mastered, the way a dim star looks grayish and a bright one shows
@@ -193,7 +205,30 @@ function renderStats() {
 
 function renderTagFilter() {
   el.tagFilter.innerHTML = "";
-  state.tags.forEach((tag) => {
+  const seen = new Set();
+
+  TAG_CATEGORY_ORDER.forEach((category) => {
+    const tagsInCategory = TAG_CATEGORIES[category].filter((t) => state.tags.includes(t));
+    tagsInCategory.forEach((t) => seen.add(t));
+    if (tagsInCategory.length) appendTagGroup(category, tagsInCategory);
+  });
+
+  const uncategorized = state.tags.filter((t) => !seen.has(t));
+  if (uncategorized.length) appendTagGroup("other", uncategorized);
+}
+
+function appendTagGroup(label, tags) {
+  const group = document.createElement("div");
+  group.className = "tag-group";
+
+  const heading = document.createElement("span");
+  heading.className = "tag-group-label";
+  heading.textContent = label;
+  group.appendChild(heading);
+
+  const chips = document.createElement("div");
+  chips.className = "tag-group-chips";
+  tags.forEach((tag) => {
     const chip = document.createElement("button");
     chip.className = "tag-chip" + (state.activeTags.has(tag) ? " active" : "");
     chip.textContent = tag;
@@ -207,8 +242,11 @@ function renderTagFilter() {
       applyHighlight();
       renderStats();
     });
-    el.tagFilter.appendChild(chip);
+    chips.appendChild(chip);
   });
+  group.appendChild(chips);
+
+  el.tagFilter.appendChild(group);
 }
 
 function matchesActiveTags(node) {
