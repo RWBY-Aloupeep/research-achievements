@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>research :: achievement wall</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-glyph">&gt;_</span>
+    <span class="brand-text">research<span class="brand-domain">/achievements</span></span>
+  </div>
+  <div class="domain-tag">domain: <span>research</span></div>
+</header>
+
+<main class="wrap">
+  <section class="convergence-panel">
+    <div class="convergence-row">
+      <div class="convergence-label">residual</div>
+      <div class="convergence-value" id="residual-value">1.000e+0</div>
+      <div class="convergence-arrow">&rarr;</div>
+      <div class="convergence-target">0</div>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="convergence-meta">
+      <span id="unlocked-count">0</span>/<span id="total-count">0</span> unlocked
+      &middot; <span id="percent-value">0.00%</span> converged
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="tag-filter" id="tag-filter"></div>
+    <button class="btn btn-add" id="open-add-form">+ new achievement</button>
+  </section>
+
+  <section class="add-form hidden" id="add-form">
+    <h2>register new achievement</h2>
+    <div class="form-row">
+      <label>title</label>
+      <input type="text" id="form-title" placeholder="e.g. Derive a weak form by hand">
+    </div>
+    <div class="form-row">
+      <label>description</label>
+      <textarea id="form-description" placeholder="what makes this verifiably done?"></textarea>
+    </div>
+    <div class="form-row">
+      <label>tags <span class="hint">(comma separated)</span></label>
+      <input type="text" id="form-tags" placeholder="pde, numerical-methods">
+    </div>
+    <div class="form-row">
+      <label>tier</label>
+      <select id="form-tier">
+        <option value="bronze">bronze</option>
+        <option value="silver">silver</option>
+        <option value="gold">gold</option>
+        <option value="platinum">platinum</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-cancel" id="cancel-add-form">cancel</button>
+      <button class="btn btn-submit" id="submit-add-form">commit</button>
+    </div>
+  </section>
+
+  <section class="grid" id="achievement-grid"></section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
