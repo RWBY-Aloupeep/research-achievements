@@ -1,6 +1,10 @@
 const MASTERY_NAMES = ["unlit", "glimmer", "shine", "bright", "blazing"];
 const MASTERY_COLORS = ["#4a5a63", "#9fb4bd", "#39ffc9", "#7fd8ff", "#ffe9a8"];
 const MASTERY_RADIUS = [5, 6.5, 8, 9.5, 11];
+// How far each mastery level's light reaches into the surrounding dark
+// background -- a real night sky, not just a bigger dot. Unlit stars cast no
+// glow at all; blazing stars visibly illuminate the space around them.
+const GLOW_RADIUS = [0, 16, 32, 52, 78];
 
 // A pair of stars is drawn as a visible "constellation" link once they share
 // at least this many tags; below that, tag overlap still pulls them together
@@ -188,6 +192,17 @@ function renderStarmap() {
     d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => container.attr("transform", event.transform))
   );
 
+  // One radial gradient per mastery level -- a soft falloff from the star's
+  // color to fully transparent, so brighter stars visibly light up the dark
+  // space around them instead of just being drawn bigger.
+  const defs = svg.append("defs");
+  MASTERY_COLORS.forEach((color, level) => {
+    const gradient = defs.append("radialGradient").attr("id", `star-glow-${level}`);
+    gradient.append("stop").attr("offset", "0%").attr("stop-color", color).attr("stop-opacity", 0.85);
+    gradient.append("stop").attr("offset", "35%").attr("stop-color", color).attr("stop-opacity", 0.35);
+    gradient.append("stop").attr("offset", "100%").attr("stop-color", color).attr("stop-opacity", 0);
+  });
+
   const nodes = state.nodes.map((n) => ({ ...n }));
   const links = buildLinks(nodes);
   const visibleLinks = links.filter((l) => l.visible);
@@ -214,10 +229,8 @@ function renderStarmap() {
 
   nodeSel.append("circle")
     .attr("class", "star-halo")
-    .attr("r", (d) => MASTERY_RADIUS[d.mastery] + 6)
-    .attr("fill", (d) => MASTERY_COLORS[d.mastery])
-    .attr("opacity", (d) => (d.mastery >= 3 ? 0.35 : 0))
-    .style("filter", "blur(4px)");
+    .attr("r", (d) => GLOW_RADIUS[d.mastery])
+    .attr("fill", (d) => `url(#star-glow-${d.mastery})`);
 
   nodeSel.append("circle")
     .attr("class", "star-core")
@@ -281,16 +294,16 @@ function lightUpAnimation(nodeId) {
   const datum = group.datum();
   const targetR = MASTERY_RADIUS[datum.mastery];
   const targetColor = MASTERY_COLORS[datum.mastery];
+  const targetGlowR = GLOW_RADIUS[datum.mastery];
 
   group.select(".star-core")
     .transition().duration(120).attr("r", targetR * 2).attr("fill", targetColor)
     .transition().duration(280).attr("r", targetR);
 
   group.select(".star-halo")
-    .transition().duration(120)
-    .attr("r", MASTERY_RADIUS[datum.mastery] + 6)
-    .attr("fill", targetColor)
-    .attr("opacity", datum.mastery >= 3 ? 0.35 : 0);
+    .attr("fill", `url(#star-glow-${datum.mastery})`)
+    .transition().duration(120).attr("r", targetGlowR * 1.3)
+    .transition().duration(400).attr("r", targetGlowR);
 
   const ring = group.append("circle")
     .attr("class", "star-node-ripple")
