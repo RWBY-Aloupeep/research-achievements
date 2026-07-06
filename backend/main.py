@@ -38,6 +38,33 @@ class AchievementCreate(BaseModel):
 
 
 VALID_TIERS = {"bronze", "silver", "gold", "platinum"}
+VALID_KINDS = {"paper", "concept"}
+
+
+def node_to_dict(row) -> dict:
+    d = dict(row)
+    d["tags"] = json.loads(d["tags"])
+    return d
+
+
+class NodeCreate(BaseModel):
+    title: str = Field(min_length=1)
+    kind: str
+    description: str = ""
+    tags: List[str] = []
+    url: Optional[str] = None
+
+
+class NodeUpdate(BaseModel):
+    title: Optional[str] = None
+    kind: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+    url: Optional[str] = None
+
+
+class MasteryUpdate(BaseModel):
+    mastery: int = Field(ge=0, le=4)
 
 
 @app.get("/api/achievements")
@@ -165,68 +192,102 @@ def delete_achievement(achievement_id: int):
         conn.close()
 
 
-@app.get("/api/graph")
-def graph():
+@app.get("/api/nodes")
+def list_nodes():
     conn = get_connection()
     try:
-        edge_rows = conn.execute(
-            "SELECT source_type, source_id, target_type, target_id, relation_type FROM edges"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM nodes ORDER BY id").fetchall()
+        return [node_to_dict(r) for r in rows]
+    finally:
+        conn.close()
 
-        # Only nodes that participate in at least one edge — an isolated
-        # achievement with no links yet isn't part of the graph.
-        needed = {"achievement": set(), "concept": set(), "paper": set()}
-        for row in edge_rows:
-            needed[row["source_type"]].add(row["source_id"])
-            needed[row["target_type"]].add(row["target_id"])
 
-        nodes = []
-        if needed["achievement"]:
-            qmarks = ",".join("?" * len(needed["achievement"]))
-            for row in conn.execute(
-                f"SELECT id, title, tier, unlocked FROM achievements WHERE id IN ({qmarks})",
-                tuple(needed["achievement"]),
-            ):
-                nodes.append({
-                    "id": f"achievement:{row['id']}",
-                    "type": "achievement",
-                    "label": row["title"],
-                    "tier": row["tier"],
-                    "unlocked": bool(row["unlocked"]),
-                })
-        if needed["concept"]:
-            qmarks = ",".join("?" * len(needed["concept"]))
-            for row in conn.execute(
-                f"SELECT id, name FROM concepts WHERE id IN ({qmarks})",
-                tuple(needed["concept"]),
-            ):
-                nodes.append({
-                    "id": f"concept:{row['id']}",
-                    "type": "concept",
-                    "label": row["name"],
-                })
-        if needed["paper"]:
-            qmarks = ",".join("?" * len(needed["paper"]))
-            for row in conn.execute(
-                f"SELECT id, title, status FROM papers WHERE id IN ({qmarks})",
-                tuple(needed["paper"]),
-            ):
-                nodes.append({
-                    "id": f"paper:{row['id']}",
-                    "type": "paper",
-                    "label": row["title"],
-                    "status": row["status"],
-                })
+@app.get("/api/nodes/tags")
+def list_node_tags():
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT tags FROM nodes").fetchall()
+        tag_set = set()
+        for r in rows:
+            tag_set.update(json.loads(r["tags"]))
+        return sorted(tag_set)
+    finally:
+        conn.close()
 
-        edges = [
-            {
-                "source": f"{row['source_type']}:{row['source_id']}",
-                "target": f"{row['target_type']}:{row['target_id']}",
-                "relation_type": row["relation_type"],
-            }
-            for row in edge_rows
-        ]
-        return {"nodes": nodes, "edges": edges}
+
+@app.post("/api/nodes", status_code=201)
+def create_node(payload: NodeCreate):
+    if payload.kind not in VALID_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(VALID_KINDS)}")
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO nodes (title, kind, description, tags, mastery, mastery_updated_at, url)
+            VALUES (?, ?, ?, ?, 0, NULL, ?)
+            """,
+            (payload.title, payload.kind, payload.description, json.dumps(payload.tags), payload.url),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM nodes WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return node_to_dict(row)
+    finally:
+        conn.close()
+
+
+@app.patch("/api/nodes/{node_id}")
+def update_node(node_id: int, payload: NodeUpdate):
+    if payload.kind is not None and payload.kind not in VALID_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(VALID_KINDS)}")
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "node not found")
+        updates = payload.model_dump(exclude_unset=True)
+        if "tags" in updates:
+            updates["tags"] = json.dumps(updates["tags"])
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(
+                f"UPDATE nodes SET {set_clause} WHERE id = ?",
+                (*updates.values(), node_id),
+            )
+            conn.commit()
+        row = conn.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
+        return node_to_dict(row)
+    finally:
+        conn.close()
+
+
+@app.patch("/api/nodes/{node_id}/mastery")
+def update_mastery(node_id: int, payload: MasteryUpdate):
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "node not found")
+        conn.execute(
+            "UPDATE nodes SET mastery = ?, mastery_updated_at = ? WHERE id = ?",
+            (payload.mastery, datetime.now(timezone.utc).isoformat(), node_id),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
+        return node_to_dict(row)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/nodes/{node_id}", status_code=204)
+def delete_node(node_id: int):
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "node not found")
+        conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+        conn.commit()
+        return None
     finally:
         conn.close()
 
