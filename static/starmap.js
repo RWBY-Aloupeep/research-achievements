@@ -7,14 +7,6 @@ const MASTERY_RADIUS = [5, 6.5, 8, 9.5, 11];
 // in the layout but no line is drawn (keeps the map from becoming a hairball).
 const VISIBLE_SHARED_TAGS = 2;
 
-// Below this average tag-similarity, two constellations stop merging into a
-// bigger one. Lower = fewer, bigger regions; higher = more, smaller regions.
-// 0.15 let one "fluids" mega-region swallow PIC/FLIP+SPH+Eulerian fluids (9 of
-// 19 stars) because generic hub tags inflate similarity; 0.25 was the lowest
-// value that split PIC/FLIP from SPH cleanly for the seed set. Retune if it
-// drifts as more stars get added.
-const CLUSTER_MERGE_THRESHOLD = 0.25;
-
 const state = {
   nodes: [],
   tags: [],
@@ -63,32 +55,6 @@ function jaccard(a, b) {
   return { similarity: union.size ? shared.length / union.size : 0, shared: shared.length };
 }
 
-// Tags that show up on nearly everything (e.g. "fluids", "particle") shouldn't
-// count as much evidence of relatedness as a rare, specific tag (e.g. "sph").
-// Used only for clustering into regions -- the raw jaccard() above still
-// drives fine-grained layout and which constellation lines get drawn.
-function computeIdf(nodes) {
-  const freq = {};
-  nodes.forEach((n) => n.tags.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
-  const idf = {};
-  Object.keys(freq).forEach((t) => { idf[t] = Math.log((nodes.length + 1) / (freq[t] + 0.5)) + 1; });
-  return idf;
-}
-
-function weightedSimilarity(a, b, idf) {
-  const setA = new Set(a);
-  const setB = new Set(b);
-  const union = new Set([...setA, ...setB]);
-  if (union.size === 0) return 0;
-  let sharedWeight = 0, unionWeight = 0;
-  union.forEach((t) => {
-    const w = idf[t] ?? 1;
-    unionWeight += w;
-    if (setA.has(t) && setB.has(t)) sharedWeight += w;
-  });
-  return unionWeight ? sharedWeight / unionWeight : 0;
-}
-
 function buildLinks(nodes) {
   const links = [];
   for (let i = 0; i < nodes.length; i++) {
@@ -105,61 +71,6 @@ function buildLinks(nodes) {
     }
   }
   return links;
-}
-
-// Groups stars into "constellations" -- the biggest sub-categories implied by
-// the tag data itself, via average-linkage agglomerative clustering on
-// IDF-weighted tag similarity. Nothing is hand-assigned: the number and
-// membership of clusters falls out of CLUSTER_MERGE_THRESHOLD. Every star
-// ends up in exactly one cluster (its primary region), even if that cluster
-// is a singleton. Returns clusters sorted biggest-first.
-function clusterNodes(nodes, threshold, idf) {
-  const n = nodes.length;
-  const sim = Array.from({ length: n }, () => new Array(n).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const similarity = weightedSimilarity(nodes[i].tags, nodes[j].tags, idf);
-      sim[i][j] = similarity;
-      sim[j][i] = similarity;
-    }
-  }
-
-  let clusters = nodes.map((_, i) => [i]);
-
-  function avgSim(a, b) {
-    let total = 0;
-    for (const i of a) for (const j of b) total += sim[i][j];
-    return total / (a.length * b.length);
-  }
-
-  while (clusters.length > 1) {
-    let bestI = -1, bestJ = -1, bestSim = -Infinity;
-    for (let i = 0; i < clusters.length; i++) {
-      for (let j = i + 1; j < clusters.length; j++) {
-        const s = avgSim(clusters[i], clusters[j]);
-        if (s > bestSim) { bestSim = s; bestI = i; bestJ = j; }
-      }
-    }
-    if (bestSim < threshold) break;
-    clusters[bestI] = clusters[bestI].concat(clusters[bestJ]);
-    clusters.splice(bestJ, 1);
-  }
-
-  clusters.sort((a, b) => b.length - a.length);
-  return clusters.map((idxs) => idxs.map((i) => nodes[i]));
-}
-
-// Labels a region with its most distinguishing tag -- weighted by IDF so a
-// tag common across the whole map (e.g. "fluids") doesn't win the label just
-// because it appears on most members; a rarer, more specific tag does. A
-// stand-in name, not a hand-picked category name.
-function labelCluster(members, idf) {
-  const freq = {};
-  members.forEach((n) => n.tags.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
-  const tags = Object.keys(freq).sort();
-  if (tags.length === 0) return "uncategorized";
-  const score = (t) => freq[t] * (idf[t] ?? 1);
-  return tags.reduce((best, t) => (score(t) > score(best) ? t : best), tags[0]);
 }
 
 async function loadAll() {
@@ -244,54 +155,13 @@ function renderStarmap() {
   );
 
   const nodes = state.nodes.map((n) => ({ ...n }));
-  // Very weak similarity pairs add noise pulling stars back together across
-  // regions without contributing much useful local structure -- drop them
-  // from the layout force (clustering above still sees the full picture).
-  const links = buildLinks(nodes).filter((l) => l.similarity >= 0.08);
+  const links = buildLinks(nodes);
   const visibleLinks = links.filter((l) => l.visible);
 
-  const idf = computeIdf(nodes);
-  const clusters = clusterNodes(nodes, CLUSTER_MERGE_THRESHOLD, idf);
-  const anchors = clusters.map((members, idx) => {
-    const angle = clusters.length > 1 ? (2 * Math.PI * idx) / clusters.length - Math.PI / 2 : 0;
-    const radius = clusters.length > 1 ? Math.min(width, height) * 0.42 : 0;
-    const anchor = {
-      x: width / 2 + radius * Math.cos(angle),
-      y: height / 2 + radius * Math.sin(angle),
-      label: labelCluster(members, idf),
-      size: members.length,
-    };
-    members.forEach((m) => { m.clusterIndex = idx; });
-    return anchor;
-  });
-
-  const regionLayer = container.append("g").attr("class", "region-layer");
-  if (anchors.length > 1) {
-    anchors.forEach((a) => {
-      const boundaryR = 44 + a.size * 15;
-      // Push the label outward along the center->anchor direction, so labels
-      // fan out around the circle instead of all bunching toward the top.
-      const dx = a.x - width / 2, dy = a.y - height / 2;
-      const len = Math.hypot(dx, dy) || 1;
-      const labelX = a.x + (dx / len) * (boundaryR + 14);
-      const labelY = a.y + (dy / len) * (boundaryR + 14);
-
-      regionLayer.append("circle")
-        .attr("class", "region-boundary")
-        .attr("cx", a.x).attr("cy", a.y)
-        .attr("r", boundaryR);
-      regionLayer.append("text")
-        .attr("class", "region-label")
-        .attr("x", labelX).attr("y", labelY)
-        .text(a.label);
-    });
-  }
-
   simulation = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 130 - d.similarity * 80).strength((d) => d.similarity * 0.5))
-    .force("charge", d3.forceManyBody().strength(-160))
-    .force("clusterX", d3.forceX((d) => anchors[d.clusterIndex].x).strength(0.32))
-    .force("clusterY", d3.forceY((d) => anchors[d.clusterIndex].y).strength(0.32))
+    .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 220 - d.similarity * 160).strength((d) => d.similarity * 0.7))
+    .force("charge", d3.forceManyBody().strength(-220))
+    .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collide", d3.forceCollide(24));
 
   linkSel = container.append("g")
