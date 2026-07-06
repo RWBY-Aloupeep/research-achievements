@@ -237,10 +237,6 @@ function renderStarmap() {
   svg = d3.select(el.canvas).append("svg").attr("width", width).attr("height", height);
   container = svg.append("g");
 
-  svg.call(
-    d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => container.attr("transform", event.transform))
-  );
-
   const defs = svg.append("defs");
   // Softens the gradient's stop edges into a proper bloom rather than a
   // visible ring, and (combined with "screen" blending below) lets several
@@ -309,7 +305,7 @@ function renderStarmap() {
     .data(nodes)
     .join("g")
     .attr("class", (d) => `star-node ${d.id === state.selectedId ? "selected" : ""}`)
-    .call(drag(simulation));
+    .call(drag(simulation, width, height));
 
   nodeSel.append("circle")
     .attr("class", "star-core")
@@ -339,6 +335,14 @@ function renderStarmap() {
   applyHighlight();
 
   simulation.on("tick", () => {
+    // Keep every star (including whatever it's being dragged toward) inside
+    // the fixed map area -- the map itself never pans/zooms, so this is the
+    // only thing keeping stars from drifting off-canvas.
+    nodes.forEach((d) => {
+      d.x = Math.max(d.radius, Math.min(width - d.radius, d.x));
+      d.y = Math.max(d.radius, Math.min(height - d.radius, d.y));
+    });
+
     linkSel
       .attr("x1", (d) => d.source.x)
       .attr("y1", (d) => d.source.y)
@@ -350,15 +354,16 @@ function renderStarmap() {
   });
 }
 
-function drag(sim) {
+function drag(sim, width, height) {
   function dragstarted(event) {
     if (!event.active) sim.alphaTarget(0.3).restart();
     event.subject.fx = event.subject.x;
     event.subject.fy = event.subject.y;
   }
   function dragged(event) {
-    event.subject.fx = event.x;
-    event.subject.fy = event.y;
+    const r = event.subject.radius;
+    event.subject.fx = Math.max(r, Math.min(width - r, event.x));
+    event.subject.fy = Math.max(r, Math.min(height - r, event.y));
   }
   function dragended(event) {
     if (!event.active) sim.alphaTarget(0);

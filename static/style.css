@@ -375,6 +375,12 @@ html, body {
   font-family: var(--mono);
   font-size: 9px;
   pointer-events: none;
+  /* Dark outline keeps labels legible over a lit star's own bright glow,
+     not just against the plain dark background. */
+  paint-order: stroke;
+  stroke: #04070b;
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 .star-node.selected text { fill: var(--text); }
 .star-link { stroke: var(--border-bright); stroke-opacity: 0.35; }
