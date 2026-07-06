@@ -309,11 +309,24 @@ function lightUpAnimation(nodeId) {
 function renderSidePanel() {
   const node = state.nodes.find((n) => n.id === state.selectedId);
   if (!node) {
-    el.sidePanel.innerHTML = `<div class="side-panel-empty">click a star to inspect it</div>`;
+    el.sidePanel.classList.add("hidden");
+    el.sidePanel.innerHTML = "";
     return;
   }
 
+  el.sidePanel.classList.remove("hidden");
   el.sidePanel.innerHTML = "";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "side-panel-close";
+  closeBtn.textContent = "×";
+  closeBtn.title = "close";
+  closeBtn.addEventListener("click", () => {
+    state.selectedId = null;
+    if (nodeSel) nodeSel.classed("selected", false);
+    renderSidePanel();
+  });
+  el.sidePanel.appendChild(closeBtn);
 
   const kind = document.createElement("div");
   kind.className = "side-panel-kind";
