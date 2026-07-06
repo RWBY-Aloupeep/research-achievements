@@ -73,7 +73,7 @@ const el = {
   formUrl: document.getElementById("form-url"),
 };
 
-let svg, container, simulation, nodeSel, linkSel;
+let svg, container, simulation, nodeSel, linkSel, haloSel;
 
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
@@ -172,6 +172,7 @@ function applyHighlight() {
   if (!nodeSel) return;
   const dimmed = state.activeTags.size > 0;
   nodeSel.attr("opacity", (d) => (!dimmed || matchesActiveTags(d) ? 1 : 0.15));
+  haloSel.attr("opacity", (d) => (!dimmed || matchesActiveTags(d) ? 1 : 0.1));
   linkSel.attr("stroke-opacity", (d) => {
     const base = 0.35;
     if (!dimmed) return base;
@@ -198,10 +199,15 @@ function renderStarmap() {
   const defs = svg.append("defs");
   MASTERY_COLORS.forEach((color, level) => {
     const gradient = defs.append("radialGradient").attr("id", `star-glow-${level}`);
-    gradient.append("stop").attr("offset", "0%").attr("stop-color", color).attr("stop-opacity", 0.85);
-    gradient.append("stop").attr("offset", "35%").attr("stop-color", color).attr("stop-opacity", 0.35);
+    gradient.append("stop").attr("offset", "0%").attr("stop-color", color).attr("stop-opacity", 0.75);
+    gradient.append("stop").attr("offset", "45%").attr("stop-color", color).attr("stop-opacity", 0.28);
     gradient.append("stop").attr("offset", "100%").attr("stop-color", color).attr("stop-opacity", 0);
   });
+  // Softens the gradient's stop edges into a proper bloom rather than a
+  // visible ring, and (combined with "screen" blending below) lets several
+  // nearby glows melt into one continuously lit patch of sky.
+  defs.append("filter").attr("id", "glow-blur").attr("x", "-100%").attr("y", "-100%").attr("width", "300%").attr("height", "300%")
+    .append("feGaussianBlur").attr("stdDeviation", 8);
 
   const nodes = state.nodes.map((n) => ({ ...n }));
   const links = buildLinks(nodes);
@@ -212,6 +218,19 @@ function renderStarmap() {
     .force("charge", d3.forceManyBody().strength(-220))
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collide", d3.forceCollide(24));
+
+  // All halos live on one shared bottom layer, behind links and star points,
+  // with "screen" blending (see CSS) so overlapping glows from nearby lit
+  // stars add together into one continuously lit patch of sky instead of
+  // stacking as separate visible blobs.
+  haloSel = container.append("g")
+    .attr("class", "halo-layer")
+    .selectAll("circle")
+    .data(nodes)
+    .join("circle")
+    .attr("class", "star-halo")
+    .attr("r", (d) => GLOW_RADIUS[d.mastery])
+    .attr("fill", (d) => `url(#star-glow-${d.mastery})`);
 
   linkSel = container.append("g")
     .selectAll("line")
@@ -226,11 +245,6 @@ function renderStarmap() {
     .join("g")
     .attr("class", (d) => `star-node ${d.id === state.selectedId ? "selected" : ""}`)
     .call(drag(simulation));
-
-  nodeSel.append("circle")
-    .attr("class", "star-halo")
-    .attr("r", (d) => GLOW_RADIUS[d.mastery])
-    .attr("fill", (d) => `url(#star-glow-${d.mastery})`);
 
   nodeSel.append("circle")
     .attr("class", "star-core")
@@ -266,6 +280,7 @@ function renderStarmap() {
       .attr("x2", (d) => d.target.x)
       .attr("y2", (d) => d.target.y);
 
+    haloSel.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
     nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
   });
 }
@@ -300,7 +315,7 @@ function lightUpAnimation(nodeId) {
     .transition().duration(120).attr("r", targetR * 2).attr("fill", targetColor)
     .transition().duration(280).attr("r", targetR);
 
-  group.select(".star-halo")
+  haloSel.filter((d) => d.id === nodeId)
     .attr("fill", `url(#star-glow-${datum.mastery})`)
     .transition().duration(120).attr("r", targetGlowR * 1.3)
     .transition().duration(400).attr("r", targetGlowR);

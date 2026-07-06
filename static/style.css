@@ -379,6 +379,15 @@ html, body {
 .star-node.selected text { fill: var(--text); }
 .star-link { stroke: var(--border-bright); stroke-opacity: 0.35; }
 
+.halo-layer { filter: url(#glow-blur); }
+.star-halo {
+  /* Additive blending: overlapping glows brighten each other instead of
+     stacking as separate visible circles, so a cluster of lit stars reads
+     as one continuously illuminated patch of sky. */
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
 .mastery-legend {
   display: flex;
   flex-wrap: wrap;
