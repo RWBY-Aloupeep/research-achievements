@@ -176,3 +176,66 @@ SEED_ACHIEVEMENTS = [
         "tier": "platinum",
     },
 ]
+
+# Small demo slice for the knowledge-graph preview. Intentionally tiny — just
+# enough real, connected nodes to look at a graph, not a real paper library.
+SEED_CONCEPTS = [
+    {
+        "name": "Finite Difference Method",
+        "description": "Approximating derivatives with discrete differences on a grid to solve PDEs numerically.",
+        "tags": ["numerical-methods", "pde"],
+    },
+    {
+        "name": "CFL Condition",
+        "description": "Necessary stability condition bounding time-step size relative to grid spacing in explicit schemes.",
+        "tags": ["numerical-methods", "pde"],
+    },
+    {
+        "name": "Von Neumann Stability Analysis",
+        "description": "Fourier-mode technique for determining whether a numerical scheme amplifies or damps errors.",
+        "tags": ["numerical-methods", "pde"],
+    },
+    {
+        "name": "Multigrid Methods",
+        "description": "Hierarchy-of-grids technique for accelerating convergence of iterative linear solvers.",
+        "tags": ["numerical-methods", "pde"],
+    },
+    {
+        "name": "Material Point Method",
+        "description": "Hybrid Lagrangian-Eulerian method representing continua with particles advected through a background grid.",
+        "tags": ["numerical-methods", "simulation"],
+    },
+]
+
+SEED_PAPERS = [
+    {
+        "title": "A Material Point Method for Snow Simulation",
+        "authors": "Stomakhin, Schroeder, Chai, Teran, Selle",
+        "year": 2013,
+        "venue": "ACM SIGGRAPH",
+        "tags": ["simulation", "mpm"],
+        "status": "read",
+    },
+    {
+        "title": "Stable Fluids",
+        "authors": "Jos Stam",
+        "year": 1999,
+        "venue": "SIGGRAPH",
+        "tags": ["simulation", "fluids"],
+        "status": "to-read",
+    },
+]
+
+# source_key/target_key are looked up against the title/name declared above
+# (or an existing achievement title) at seed time.
+SEED_EDGES = [
+    {"source_type": "achievement", "source_key": "Discretize a 1D Heat Equation", "relation_type": "demonstrates", "target_type": "concept", "target_key": "Finite Difference Method"},
+    {"source_type": "achievement", "source_key": "CFL Chaser", "relation_type": "demonstrates", "target_type": "concept", "target_key": "CFL Condition"},
+    {"source_type": "achievement", "source_key": "MPM From Scratch", "relation_type": "demonstrates", "target_type": "concept", "target_key": "Material Point Method"},
+    {"source_type": "achievement", "source_key": "Multigrid or Bust", "relation_type": "demonstrates", "target_type": "concept", "target_key": "Multigrid Methods"},
+    {"source_type": "achievement", "source_key": "Stability Proof", "relation_type": "demonstrates", "target_type": "concept", "target_key": "Von Neumann Stability Analysis"},
+    {"source_type": "concept", "source_key": "CFL Condition", "relation_type": "prerequisite_of", "target_type": "concept", "target_key": "Von Neumann Stability Analysis"},
+    {"source_type": "concept", "source_key": "Finite Difference Method", "relation_type": "prerequisite_of", "target_type": "concept", "target_key": "Multigrid Methods"},
+    {"source_type": "paper", "source_key": "A Material Point Method for Snow Simulation", "relation_type": "introduces", "target_type": "concept", "target_key": "Material Point Method"},
+    {"source_type": "paper", "source_key": "Stable Fluids", "relation_type": "related_to", "target_type": "concept", "target_key": "Finite Difference Method"},
+]

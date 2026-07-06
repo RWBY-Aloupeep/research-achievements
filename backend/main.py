@@ -165,6 +165,72 @@ def delete_achievement(achievement_id: int):
         conn.close()
 
 
+@app.get("/api/graph")
+def graph():
+    conn = get_connection()
+    try:
+        edge_rows = conn.execute(
+            "SELECT source_type, source_id, target_type, target_id, relation_type FROM edges"
+        ).fetchall()
+
+        # Only nodes that participate in at least one edge — an isolated
+        # achievement with no links yet isn't part of the graph.
+        needed = {"achievement": set(), "concept": set(), "paper": set()}
+        for row in edge_rows:
+            needed[row["source_type"]].add(row["source_id"])
+            needed[row["target_type"]].add(row["target_id"])
+
+        nodes = []
+        if needed["achievement"]:
+            qmarks = ",".join("?" * len(needed["achievement"]))
+            for row in conn.execute(
+                f"SELECT id, title, tier, unlocked FROM achievements WHERE id IN ({qmarks})",
+                tuple(needed["achievement"]),
+            ):
+                nodes.append({
+                    "id": f"achievement:{row['id']}",
+                    "type": "achievement",
+                    "label": row["title"],
+                    "tier": row["tier"],
+                    "unlocked": bool(row["unlocked"]),
+                })
+        if needed["concept"]:
+            qmarks = ",".join("?" * len(needed["concept"]))
+            for row in conn.execute(
+                f"SELECT id, name FROM concepts WHERE id IN ({qmarks})",
+                tuple(needed["concept"]),
+            ):
+                nodes.append({
+                    "id": f"concept:{row['id']}",
+                    "type": "concept",
+                    "label": row["name"],
+                })
+        if needed["paper"]:
+            qmarks = ",".join("?" * len(needed["paper"]))
+            for row in conn.execute(
+                f"SELECT id, title, status FROM papers WHERE id IN ({qmarks})",
+                tuple(needed["paper"]),
+            ):
+                nodes.append({
+                    "id": f"paper:{row['id']}",
+                    "type": "paper",
+                    "label": row["title"],
+                    "status": row["status"],
+                })
+
+        edges = [
+            {
+                "source": f"{row['source_type']}:{row['source_id']}",
+                "target": f"{row['target_type']}:{row['target_id']}",
+                "relation_type": row["relation_type"],
+            }
+            for row in edge_rows
+        ]
+        return {"nodes": nodes, "edges": edges}
+    finally:
+        conn.close()
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

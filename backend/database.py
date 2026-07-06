@@ -17,15 +17,41 @@ CREATE TABLE IF NOT EXISTS achievements (
     custom INTEGER NOT NULL DEFAULT 0
 );
 
--- Future cross-module linking (e.g. achievement -> paper, achievement -> concept).
--- Left empty in this pass; no achievement-specific foreign keys are added.
+-- Knowledge-graph nodes. Kept as their own concrete tables (like achievements)
+-- rather than one polymorphic "nodes" table.
+CREATE TABLE IF NOT EXISTS concepts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    domain TEXT NOT NULL DEFAULT 'research',
+    tags TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS papers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    authors TEXT NOT NULL,
+    year INTEGER,
+    venue TEXT,
+    domain TEXT NOT NULL DEFAULT 'research',
+    tags TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'to-read',
+    zotero_key TEXT
+);
+
+-- Generic cross-module link: (source_type, source_id) -> (target_type, target_id).
+-- source_type/target_type are one of 'achievement' | 'concept' | 'paper'.
+-- relation_type is free-form (e.g. 'demonstrates', 'introduces', 'prerequisite_of')
+-- so new relation kinds don't require a migration.
 CREATE TABLE IF NOT EXISTS edges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_type TEXT NOT NULL,
     source_id INTEGER NOT NULL,
     target_type TEXT NOT NULL,
     target_id INTEGER NOT NULL,
-    relation_type TEXT NOT NULL
+    relation_type TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -44,12 +70,15 @@ def init_db() -> None:
         conn.commit()
         row = conn.execute("SELECT COUNT(*) AS c FROM achievements").fetchone()
         if row["c"] == 0:
-            _seed(conn)
+            _seed_achievements(conn)
+        row = conn.execute("SELECT COUNT(*) AS c FROM concepts").fetchone()
+        if row["c"] == 0:
+            _seed_knowledge_graph(conn)
     finally:
         conn.close()
 
 
-def _seed(conn: sqlite3.Connection) -> None:
+def _seed_achievements(conn: sqlite3.Connection) -> None:
     from seed_data import SEED_ACHIEVEMENTS
 
     conn.executemany(
@@ -68,4 +97,61 @@ def _seed(conn: sqlite3.Connection) -> None:
             for a in SEED_ACHIEVEMENTS
         ],
     )
+    conn.commit()
+
+
+def _seed_knowledge_graph(conn: sqlite3.Connection) -> None:
+    from seed_data import SEED_CONCEPTS, SEED_EDGES, SEED_PAPERS
+
+    concept_ids = {}
+    for c in SEED_CONCEPTS:
+        cur = conn.execute(
+            "INSERT INTO concepts (name, description, domain, tags) VALUES (?, ?, ?, ?)",
+            (c["name"], c["description"], c.get("domain", "research"), json.dumps(c["tags"])),
+        )
+        concept_ids[c["name"]] = cur.lastrowid
+
+    paper_ids = {}
+    for p in SEED_PAPERS:
+        cur = conn.execute(
+            """
+            INSERT INTO papers (title, authors, year, venue, domain, tags, status, zotero_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                p["title"],
+                p["authors"],
+                p.get("year"),
+                p.get("venue"),
+                p.get("domain", "research"),
+                json.dumps(p["tags"]),
+                p.get("status", "to-read"),
+            ),
+        )
+        paper_ids[p["title"]] = cur.lastrowid
+
+    achievement_ids = {
+        row["title"]: row["id"]
+        for row in conn.execute("SELECT id, title FROM achievements").fetchall()
+    }
+
+    lookup = {
+        "achievement": achievement_ids,
+        "concept": concept_ids,
+        "paper": paper_ids,
+    }
+
+    for e in SEED_EDGES:
+        source_id = lookup[e["source_type"]].get(e["source_key"])
+        target_id = lookup[e["target_type"]].get(e["target_key"])
+        if source_id is None or target_id is None:
+            continue
+        conn.execute(
+            """
+            INSERT INTO edges (source_type, source_id, target_type, target_id, relation_type)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (e["source_type"], source_id, e["target_type"], target_id, e["relation_type"]),
+        )
+
     conn.commit()
