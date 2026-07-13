@@ -321,9 +321,19 @@ function renderStarmap() {
   });
   const freq = tagFrequency(nodes);
   nodes.forEach((n) => {
-    n.radius = coreRadius(degreeById[n.id] || 0);
+    n.degree = degreeById[n.id] || 0;
+    n.radius = coreRadius(n.degree);
     n.hue = starHue(n, freq);
   });
+
+  // Hide labels for the least-connected stars so the map doesn't turn into a
+  // wall of overlapping text as more stars get added -- adapts to the actual
+  // degree distribution (25th percentile) rather than a fixed cutoff, so it
+  // scales with however dense/sparse the map currently is. Hover (tooltip)
+  // and click (side panel) still work regardless of label visibility.
+  const sortedDegrees = nodes.map((n) => n.degree).sort((a, b) => a - b);
+  const labelDegreeThreshold = sortedDegrees[Math.floor(sortedDegrees.length * 0.25)] ?? 0;
+  nodes.forEach((n) => { n.showLabel = n.degree >= labelDegreeThreshold; });
 
   // One radial gradient per star (color is per-star via its hue; only
   // opacity/radius scale with mastery).
@@ -338,8 +348,17 @@ function renderStarmap() {
 
   simulation = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 220 - d.similarity * 160).strength((d) => d.similarity * 0.7))
-    .force("charge", d3.forceManyBody().strength(-220))
+    // distanceMax keeps repulsion local -- without it, far-apart stars (e.g.
+    // two weakly-connected topic clusters) still shove each other toward
+    // opposite corners instead of settling near the middle.
+    .force("charge", d3.forceManyBody().strength(-200).distanceMax(280))
     .force("center", d3.forceCenter(width / 2, height / 2))
+    // Gentle per-star pull toward the canvas center (on top of forceCenter,
+    // which only recenters the *average* position) -- keeps individual
+    // stars, especially ones in a cluster with few cross-links to the rest
+    // of the map, from drifting out and piling up against the boundary.
+    .force("x", d3.forceX(width / 2).strength(0.03))
+    .force("y", d3.forceY(height / 2).strength(0.03))
     .force("collide", d3.forceCollide((d) => d.radius + 12));
 
   // All halos live on one shared bottom layer, behind links and star points,
@@ -375,6 +394,7 @@ function renderStarmap() {
     .attr("fill", (d) => starColor(d.hue, d.mastery));
 
   nodeSel.append("text")
+    .attr("class", (d) => (d.showLabel ? "" : "label-hidden"))
     .attr("dx", (d) => d.radius + 5)
     .attr("dy", 4)
     .text((d) => shortLabel(d.title));
@@ -399,10 +419,15 @@ function renderStarmap() {
   simulation.on("tick", () => {
     // Keep every star (including whatever it's being dragged toward) inside
     // the fixed map area -- the map itself never pans/zooms, so this is the
-    // only thing keeping stars from drifting off-canvas.
+    // only thing keeping stars from drifting off-canvas. Also zero out any
+    // velocity driving further into the wall -- clamping position alone
+    // leaves stale velocity that re-slams the star into the boundary every
+    // subsequent tick, effectively gluing whole clusters to the edge.
     nodes.forEach((d) => {
-      d.x = Math.max(d.radius, Math.min(width - d.radius, d.x));
-      d.y = Math.max(d.radius, Math.min(height - d.radius, d.y));
+      if (d.x < d.radius) { d.x = d.radius; d.vx = Math.max(0, d.vx); }
+      else if (d.x > width - d.radius) { d.x = width - d.radius; d.vx = Math.min(0, d.vx); }
+      if (d.y < d.radius) { d.y = d.radius; d.vy = Math.max(0, d.vy); }
+      else if (d.y > height - d.radius) { d.y = height - d.radius; d.vy = Math.min(0, d.vy); }
     });
 
     linkSel

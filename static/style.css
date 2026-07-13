@@ -400,6 +400,10 @@ html, body {
   stroke-linejoin: round;
 }
 .star-node.selected text { fill: var(--text); }
+/* Low-connectivity stars keep their tooltip (hover) and side panel (click)
+   identification; only the always-on map label is suppressed to cut clutter. */
+.star-node text.label-hidden { display: none; }
+.star-node.selected text.label-hidden { display: inline; }
 .star-link { stroke: var(--border-bright); stroke-opacity: 0.35; }
 
 .halo-layer { filter: url(#glow-blur); }
