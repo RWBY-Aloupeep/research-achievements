@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -153,6 +153,17 @@ def delete_node(node_id: int):
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    # Cache-bust style.css/starmap.js with a version tied to their actual
+    # mtime, computed fresh per request -- a hardcoded ?v=N query param
+    # silently goes stale the moment those files are edited again without
+    # remembering to bump it (this bit us once already: a browser that
+    # loaded the page early kept serving a stale cached JS/CSS pair for the
+    # rest of the session while a differently-cached tab showed newer code).
+    version = str(int(max(
+        (STATIC_DIR / "style.css").stat().st_mtime,
+        (STATIC_DIR / "starmap.js").stat().st_mtime,
+    )))
+    html = (STATIC_DIR / "index.html").read_text()
+    return html.replace("__ASSET_VERSION__", version)

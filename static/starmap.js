@@ -202,6 +202,20 @@ function jaccard(a, b) {
   return { similarity: union.size ? shared.length / union.size : 0, shared: shared.length };
 }
 
+// Keeps every star (including whatever it's being dragged toward) inside the
+// fixed map area -- the map never pans/zooms, so this is the only thing
+// keeping stars from drifting off-canvas. Also zeroes any velocity driving
+// further into the wall -- clamping position alone leaves stale velocity
+// that re-slams a star into the boundary every subsequent tick.
+function clampToBounds(nodes, width, height) {
+  nodes.forEach((d) => {
+    if (d.x < d.radius) { d.x = d.radius; d.vx = Math.max(0, d.vx); }
+    else if (d.x > width - d.radius) { d.x = width - d.radius; d.vx = Math.min(0, d.vx); }
+    if (d.y < d.radius) { d.y = d.radius; d.vy = Math.max(0, d.vy); }
+    else if (d.y > height - d.radius) { d.y = height - d.radius; d.vy = Math.min(0, d.vy); }
+  });
+}
+
 function buildLinks(nodes) {
   const links = [];
   for (let i = 0; i < nodes.length; i++) {
@@ -429,10 +443,23 @@ function renderStarmap() {
     // before since region anchoring now does the heavy lifting.
     .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 60 - d.similarity * 35).strength((d) => d.similarity * 0.25))
     .force("charge", d3.forceManyBody().strength(-55).distanceMax(110))
-    .force("collide", d3.forceCollide((d) => d.radius + 6))
-    .force("x", d3.forceX((d) => anchors[d.category].x).strength(0.32))
-    .force("y", d3.forceY((d) => anchors[d.category].y).strength(0.32))
-    .alphaDecay(0.05); // settles quickly since stars start near their final spot
+    .force("collide", d3.forceCollide((d) => d.radius + 6).iterations(3))
+    .force("x", d3.forceX((d) => anchors[d.category].x).strength(0.28))
+    .force("y", d3.forceY((d) => anchors[d.category].y).strength(0.28))
+    .stop();
+
+  // Pre-converge synchronously (d3's own tick() doesn't fire the "tick"
+  // event, so the boundary clamp is replicated inline here) before anything
+  // is drawn, rather than animating from the seeded positions to their
+  // resting spot -- a real star map doesn't play a settling animation every
+  // time you open it, and running collide to completion here is also what
+  // actually guarantees stars stop overlapping (an animated render only got
+  // as far as the alpha decay allowed before going idle).
+  clampToBounds(nodes, width, height);
+  for (let i = 0; i < 400; i++) {
+    simulation.tick();
+    clampToBounds(nodes, width, height);
+  }
 
   // All halos live on one shared bottom layer, behind star points, with
   // "screen" blending (see CSS) so overlapping glows from nearby lit stars
@@ -482,20 +509,14 @@ function renderStarmap() {
 
   applyHighlight();
 
-  simulation.on("tick", () => {
-    // Keep every star (including whatever it's being dragged toward) inside
-    // the fixed map area -- the map itself never pans/zooms, so this is the
-    // only thing keeping stars from drifting off-canvas. Also zero out any
-    // velocity driving further into the wall -- clamping position alone
-    // leaves stale velocity that re-slams the star into the boundary every
-    // subsequent tick, effectively gluing whole clusters to the edge.
-    nodes.forEach((d) => {
-      if (d.x < d.radius) { d.x = d.radius; d.vx = Math.max(0, d.vx); }
-      else if (d.x > width - d.radius) { d.x = width - d.radius; d.vx = Math.min(0, d.vx); }
-      if (d.y < d.radius) { d.y = d.radius; d.vy = Math.max(0, d.vy); }
-      else if (d.y > height - d.radius) { d.y = height - d.radius; d.vy = Math.min(0, d.vy); }
-    });
+  // Draw the pre-converged positions immediately (no animation from seed to
+  // settled -- see the pre-convergence loop above), then only re-run the
+  // simulation's own timer for drag interactions from here on.
+  haloSel.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+  nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
 
+  simulation.on("tick", () => {
+    clampToBounds(nodes, width, height);
     haloSel.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
     nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
   });
