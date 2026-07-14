@@ -404,7 +404,25 @@ html, body {
    identification; only the always-on map label is suppressed to cut clutter. */
 .star-node text.label-hidden { display: none; }
 .star-node.selected text.label-hidden { display: inline; }
-.star-link { stroke: var(--border-bright); stroke-opacity: 0.35; }
+
+.region-boundary {
+  fill: none;
+  stroke: var(--border-bright);
+  stroke-width: 1px;
+  stroke-dasharray: 2 8;
+  opacity: 0.15;
+  pointer-events: none;
+}
+.region-label {
+  fill: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  text-anchor: middle;
+  opacity: 0.5;
+  pointer-events: none;
+}
 
 .halo-layer { filter: url(#glow-blur); }
 .star-halo {

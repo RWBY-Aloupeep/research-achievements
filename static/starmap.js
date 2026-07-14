@@ -1,16 +1,41 @@
 const MASTERY_NAMES = ["unlit", "glimmer", "shine", "bright", "blazing"];
 
-// Curated grouping for the tag filter bar only -- doesn't touch the data
-// model (tags stay flat/multi-valued on each node) or star layout, purely an
-// aid for scanning ~20+ tags. Tags not listed here (e.g. from custom stars)
-// fall into an "other" group automatically.
+// Curated grouping for the tag filter bar, AND (see primaryCategory below)
+// the basis for which region of the map a star is pulled toward. Doesn't
+// touch the data model -- tags stay flat/multi-valued on each node, this is
+// purely a derived, render-time grouping. Tags not listed here (e.g. from
+// custom stars) fall into an "other" group automatically. Broad, generic
+// descriptors (simulation, review, dataset, ...) are kept in their own
+// bucket rather than folded into a topic category, so they don't quietly
+// tip a star's category vote just because they co-occur with everything.
 const TAG_CATEGORIES = {
-  "simulation paradigms": ["eulerian", "lagrangian", "hybrid", "mpm", "sph", "pic", "flip", "particle", "simulation"],
-  "numerical methods": ["discretization", "grid", "pde", "navier-stokes", "fem", "position-based"],
-  "materials & phenomena": ["fluids", "snow", "sand", "elasticity", "soft-robotics"],
+  "simulation paradigms": ["eulerian", "lagrangian", "hybrid", "mpm", "sph", "pic", "flip", "particle"],
+  "numerical methods": ["discretization", "grid", "pde", "navier-stokes", "fem", "position-based", "cfd"],
+  "materials & phenomena": ["fluids", "snow", "sand", "elasticity", "soft-robotics", "combustion", "flame-dynamics", "smoke"],
+  "wildfire & vortex dynamics": ["vortex", "fire-whirl", "wildfire", "plume", "atmospheric-coupling"],
   "learning-based": ["differentiable", "neural", "learning-based", "graph-networks", "dsl", "sparse", "gradient"],
+  "research methodology": ["dataset", "field-observation", "review", "simulation", "graphics"],
 };
 const TAG_CATEGORY_ORDER = Object.keys(TAG_CATEGORIES);
+
+// A star's map region: whichever curated category it has the most tags in
+// (ties go to the earlier category in TAG_CATEGORY_ORDER). Deterministic and
+// stable -- no clustering algorithm, so the same tags always land in the
+// same region.
+function primaryCategory(node) {
+  const counts = {};
+  node.tags.forEach((t) => {
+    const cat = TAG_CATEGORY_ORDER.find((c) => TAG_CATEGORIES[c].includes(t));
+    if (cat) counts[cat] = (counts[cat] || 0) + 1;
+  });
+  let best = "other";
+  let bestCount = 0;
+  TAG_CATEGORY_ORDER.forEach((c) => {
+    const n = counts[c] || 0;
+    if (n > bestCount) { best = c; bestCount = n; }
+  });
+  return best;
+}
 
 // Mastery is purely a brightness dimension now, not a hue -- a star's color
 // stays fixed (see starHue below) while its saturation/lightness climb as it
@@ -157,7 +182,7 @@ el.masteryGuideToggle.addEventListener("click", () => {
   el.masteryGuideHint.textContent = collapsed ? "what do these mean? ↓" : "hide ↑";
 });
 
-let svg, container, simulation, nodeSel, linkSel, haloSel;
+let svg, container, simulation, nodeSel, haloSel;
 
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
@@ -283,12 +308,6 @@ function applyHighlight() {
   const dimmed = state.activeTags.size > 0;
   nodeSel.attr("opacity", (d) => (!dimmed || matchesActiveTags(d) ? 1 : 0.15));
   haloSel.attr("opacity", (d) => (!dimmed || matchesActiveTags(d) ? 1 : 0.1));
-  linkSel.attr("stroke-opacity", (d) => {
-    const base = 0.35;
-    if (!dimmed) return base;
-    const bothMatch = matchesActiveTags(d.source) && matchesActiveTags(d.target);
-    return bothMatch ? base : 0.04;
-  });
 }
 
 function renderStarmap() {
@@ -324,6 +343,7 @@ function renderStarmap() {
     n.degree = degreeById[n.id] || 0;
     n.radius = coreRadius(n.degree);
     n.hue = starHue(n, freq);
+    n.category = primaryCategory(n);
   });
 
   // Hide labels for the least-connected stars so the map doesn't turn into a
@@ -346,25 +366,78 @@ function renderStarmap() {
     gradient.append("stop").attr("offset", "100%").attr("stop-color", glowColor(n.hue)).attr("stop-opacity", 0);
   });
 
-  simulation = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 220 - d.similarity * 160).strength((d) => d.similarity * 0.7))
-    // distanceMax keeps repulsion local -- without it, far-apart stars (e.g.
-    // two weakly-connected topic clusters) still shove each other toward
-    // opposite corners instead of settling near the middle.
-    .force("charge", d3.forceManyBody().strength(-200).distanceMax(280))
-    .force("center", d3.forceCenter(width / 2, height / 2))
-    // Gentle per-star pull toward the canvas center (on top of forceCenter,
-    // which only recenters the *average* position) -- keeps individual
-    // stars, especially ones in a cluster with few cross-links to the rest
-    // of the map, from drifting out and piling up against the boundary.
-    .force("x", d3.forceX(width / 2).strength(0.03))
-    .force("y", d3.forceY(height / 2).strength(0.03))
-    .force("collide", d3.forceCollide((d) => d.radius + 12));
+  // Regions: one per category actually present among the current stars, laid
+  // out evenly around a circle. This (not an automatic clustering algorithm)
+  // is what makes the map read like a real star chart -- the same tags
+  // always land in the same part of the sky, so a returning viewer can
+  // orient at a glance instead of re-learning the layout every visit.
+  const activeCategories = [...TAG_CATEGORY_ORDER, "other"].filter((c) => nodes.some((n) => n.category === c));
+  const regionRadius = {};
+  activeCategories.forEach((c) => {
+    const count = nodes.filter((n) => n.category === c).length;
+    regionRadius[c] = 24 + Math.sqrt(count) * 13;
+  });
+  // Ring radius adapts to how many/how-large the regions are, so adjacent
+  // regions' boundary circles never overlap regardless of how the stars are
+  // distributed across categories -- a fixed fraction of canvas size looked
+  // fine at 4 categories but crowded once there were 6.
+  const ringGap = 90;
+  const ringCircumference = activeCategories.reduce((sum, c) => sum + 2 * regionRadius[c] + ringGap, 0);
+  const ringRadius = activeCategories.length > 1
+    ? Math.max(Math.min(width, height) * 0.3, ringCircumference / (2 * Math.PI))
+    : 0;
 
-  // All halos live on one shared bottom layer, behind links and star points,
-  // with "screen" blending (see CSS) so overlapping glows from nearby lit
-  // stars add together into one continuously lit patch of sky instead of
-  // stacking as separate visible blobs.
+  const anchors = {};
+  activeCategories.forEach((c, i) => {
+    const angle = (2 * Math.PI * i) / activeCategories.length - Math.PI / 2;
+    anchors[c] = { x: width / 2 + ringRadius * Math.cos(angle), y: height / 2 + ringRadius * Math.sin(angle), label: c };
+  });
+
+  // Seed each star at its region's anchor (plus a little jitter) rather than
+  // d3's default spiral-from-origin -- the simulation then only has to
+  // settle *within* its region instead of flying across the whole canvas,
+  // which is most of what made reloads look like a chaotic animation rather
+  // than a fixed map.
+  nodes.forEach((n) => {
+    const a = anchors[n.category];
+    n.x = a.x + (Math.random() - 0.5) * 30;
+    n.y = a.y + (Math.random() - 0.5) * 30;
+  });
+
+  if (activeCategories.length > 1) {
+    const regionLayer = container.append("g").attr("class", "region-layer");
+    activeCategories.forEach((c) => {
+      const a = anchors[c];
+      const boundaryR = regionRadius[c];
+      const dx = a.x - width / 2, dy = a.y - height / 2;
+      const len = Math.hypot(dx, dy) || 1;
+      regionLayer.append("circle")
+        .attr("class", "region-boundary")
+        .attr("cx", a.x).attr("cy", a.y).attr("r", boundaryR);
+      regionLayer.append("text")
+        .attr("class", "region-label")
+        .attr("x", a.x + (dx / len) * (boundaryR + 14))
+        .attr("y", a.y + (dy / len) * (boundaryR + 14))
+        .text(a.label);
+    });
+  }
+
+  simulation = d3.forceSimulation(nodes)
+    // A light similarity-based pull for fine arrangement *within* a region
+    // (e.g. MPM papers still end up nearer each other than PIC/FLIP papers,
+    // even though both are "simulation paradigms") -- much weaker than
+    // before since region anchoring now does the heavy lifting.
+    .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 60 - d.similarity * 35).strength((d) => d.similarity * 0.25))
+    .force("charge", d3.forceManyBody().strength(-55).distanceMax(110))
+    .force("collide", d3.forceCollide((d) => d.radius + 6))
+    .force("x", d3.forceX((d) => anchors[d.category].x).strength(0.32))
+    .force("y", d3.forceY((d) => anchors[d.category].y).strength(0.32))
+    .alphaDecay(0.05); // settles quickly since stars start near their final spot
+
+  // All halos live on one shared bottom layer, behind star points, with
+  // "screen" blending (see CSS) so overlapping glows from nearby lit stars
+  // add together into one continuously lit patch of sky instead of stacking
+  // as separate visible blobs.
   haloSel = container.append("g")
     .attr("class", "halo-layer")
     .selectAll("circle")
@@ -373,13 +446,6 @@ function renderStarmap() {
     .attr("class", "star-halo")
     .attr("r", (d) => GLOW_RADIUS[d.mastery])
     .attr("fill", (d) => `url(#star-glow-${d.id})`);
-
-  linkSel = container.append("g")
-    .selectAll("line")
-    .data(visibleLinks)
-    .join("line")
-    .attr("class", "star-link")
-    .attr("stroke-opacity", 0.35);
 
   nodeSel = container.append("g")
     .selectAll("g")
@@ -429,12 +495,6 @@ function renderStarmap() {
       if (d.y < d.radius) { d.y = d.radius; d.vy = Math.max(0, d.vy); }
       else if (d.y > height - d.radius) { d.y = height - d.radius; d.vy = Math.min(0, d.vy); }
     });
-
-    linkSel
-      .attr("x1", (d) => d.source.x)
-      .attr("y1", (d) => d.source.y)
-      .attr("x2", (d) => d.target.x)
-      .attr("y2", (d) => d.target.y);
 
     haloSel.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
     nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
