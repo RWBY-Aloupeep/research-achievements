@@ -400,8 +400,10 @@ html, body {
   stroke-linejoin: round;
 }
 .star-node.selected text { fill: var(--text); }
-/* Low-connectivity stars keep their tooltip (hover) and side panel (click)
-   identification; only the always-on map label is suppressed to cut clutter. */
+/* Labels are off by default to keep the map clean -- tooltip (hover) and
+   side panel (click) still identify any star. A tag selection reveals
+   labels for the matching stars (see applyHighlight); a selected star's
+   label always shows regardless. */
 .star-node text.label-hidden { display: none; }
 .star-node.selected text.label-hidden { display: inline; }
 

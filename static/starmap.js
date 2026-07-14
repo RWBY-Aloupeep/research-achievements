@@ -322,6 +322,9 @@ function applyHighlight() {
   const dimmed = state.activeTags.size > 0;
   nodeSel.attr("opacity", (d) => (!dimmed || matchesActiveTags(d) ? 1 : 0.15));
   haloSel.attr("opacity", (d) => (!dimmed || matchesActiveTags(d) ? 1 : 0.1));
+  // Labels stay off in the normal (no tags selected) state to keep the map
+  // clean; selecting a tag reveals the label only for the stars it matches.
+  nodeSel.select("text").classed("label-hidden", (d) => !(dimmed && matchesActiveTags(d)));
 }
 
 function renderStarmap() {
@@ -359,15 +362,6 @@ function renderStarmap() {
     n.hue = starHue(n, freq);
     n.category = primaryCategory(n);
   });
-
-  // Hide labels for the least-connected stars so the map doesn't turn into a
-  // wall of overlapping text as more stars get added -- adapts to the actual
-  // degree distribution (25th percentile) rather than a fixed cutoff, so it
-  // scales with however dense/sparse the map currently is. Hover (tooltip)
-  // and click (side panel) still work regardless of label visibility.
-  const sortedDegrees = nodes.map((n) => n.degree).sort((a, b) => a - b);
-  const labelDegreeThreshold = sortedDegrees[Math.floor(sortedDegrees.length * 0.25)] ?? 0;
-  nodes.forEach((n) => { n.showLabel = n.degree >= labelDegreeThreshold; });
 
   // One radial gradient per star (color is per-star via its hue; only
   // opacity/radius scale with mastery).
@@ -487,7 +481,7 @@ function renderStarmap() {
     .attr("fill", (d) => starColor(d.hue, d.mastery));
 
   nodeSel.append("text")
-    .attr("class", (d) => (d.showLabel ? "" : "label-hidden"))
+    .attr("class", "label-hidden")
     .attr("dx", (d) => d.radius + 5)
     .attr("dy", 4)
     .text((d) => shortLabel(d.title));

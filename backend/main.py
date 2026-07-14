@@ -161,9 +161,16 @@ def index():
     # remembering to bump it (this bit us once already: a browser that
     # loaded the page early kept serving a stale cached JS/CSS pair for the
     # rest of the session while a differently-cached tab showed newer code).
+    # That fix only helps if this shell HTML itself gets re-fetched, though --
+    # explicitly forbid caching the shell too, so a browser can't skip
+    # straight past the version-computing code below by reusing an old copy
+    # of this response.
     version = str(int(max(
         (STATIC_DIR / "style.css").stat().st_mtime,
         (STATIC_DIR / "starmap.js").stat().st_mtime,
     )))
     html = (STATIC_DIR / "index.html").read_text()
-    return html.replace("__ASSET_VERSION__", version)
+    return HTMLResponse(
+        html.replace("__ASSET_VERSION__", version),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
