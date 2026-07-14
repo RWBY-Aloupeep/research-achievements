@@ -1,19 +1,17 @@
-# Starter set for the star map. Real, well-known papers/concepts in
-# physics-based animation -- placeholders the user will replace/expand.
-# Tags are chosen so shared-tag clusters ("constellations") form naturally:
-# MPM, PIC/FLIP, Eulerian fluids, SPH, FEM, and neural/differentiable sim.
+# Starter set for the star map. Real, well-known papers in physics-based
+# animation -- placeholders the user will replace/expand. Papers only: the
+# "concept" kind (e.g. "Material Point Method (MPM)" as a standalone idea,
+# not a specific paper) was tried and then dropped -- concepts have no
+# author, which doesn't fit an author-based map, and the user asked to
+# remove them entirely rather than special-case them. Tags are chosen so
+# shared-tag clusters ("constellations") form naturally: MPM, PIC/FLIP,
+# Eulerian fluids, SPH, FEM, and neural/differentiable sim.
 SEED_NODES = [
     {
         "title": "A Material Point Method for Snow Simulation",
         "kind": "paper",
         "description": "Stomakhin et al. 2013 -- introduced MPM to graphics for simulating snow.",
         "tags": ["mpm", "hybrid", "simulation", "snow"],
-    },
-    {
-        "title": "Material Point Method (MPM)",
-        "kind": "concept",
-        "description": "Hybrid Lagrangian-Eulerian method: particles carry state, a background grid handles gradients/collisions.",
-        "tags": ["mpm", "hybrid", "lagrangian", "eulerian"],
     },
     {
         "title": "The Particle-in-Cell Method for Fluid Dynamics",
@@ -34,28 +32,10 @@ SEED_NODES = [
         "tags": ["flip", "fluids", "sand", "particle"],
     },
     {
-        "title": "PIC/FLIP Transfer Schemes",
-        "kind": "concept",
-        "description": "How particle and grid representations exchange velocity each step, and the PIC/FLIP blend tradeoff.",
-        "tags": ["pic", "flip", "particle", "grid", "fluids"],
-    },
-    {
         "title": "Stable Fluids",
         "kind": "paper",
         "description": "Jos Stam 1999 -- unconditionally stable semi-Lagrangian advection for real-time Eulerian fluids.",
         "tags": ["eulerian", "fluids", "navier-stokes", "grid"],
-    },
-    {
-        "title": "Navier-Stokes Discretization",
-        "kind": "concept",
-        "description": "How the incompressible Navier-Stokes equations get discretized on a grid (advect, project, diffuse).",
-        "tags": ["navier-stokes", "fluids", "pde", "discretization"],
-    },
-    {
-        "title": "Eulerian vs Lagrangian Methods",
-        "kind": "concept",
-        "description": "Fixed-grid vs particle-based views of continuum motion, and why hybrids exist.",
-        "tags": ["eulerian", "lagrangian", "discretization"],
     },
     {
         "title": "Smoothed Particle Hydrodynamics: Theory and Application to Non-Spherical Stars",
@@ -64,22 +44,10 @@ SEED_NODES = [
         "tags": ["sph", "particle", "fluids"],
     },
     {
-        "title": "Smoothed Particle Hydrodynamics (SPH)",
-        "kind": "concept",
-        "description": "Meshless Lagrangian method: field quantities interpolated from nearby particles via a smoothing kernel.",
-        "tags": ["sph", "particle", "lagrangian", "fluids"],
-    },
-    {
         "title": "Position Based Fluids",
         "kind": "paper",
         "description": "Macklin & Muller 2013 -- SPH-like fluids solved via position-based constraint projection.",
         "tags": ["sph", "particle", "fluids", "position-based"],
-    },
-    {
-        "title": "Finite Element Method (FEM)",
-        "kind": "concept",
-        "description": "Discretizing a domain into elements and solving PDEs via a weak/variational formulation over them.",
-        "tags": ["fem", "discretization", "elasticity"],
     },
     {
         "title": "Taichi: A Language for High-Performance Computation on Spatially Sparse Data Structures",
@@ -104,17 +72,5 @@ SEED_NODES = [
         "kind": "paper",
         "description": "Sanchez-Gonzalez et al. 2020 -- graph neural networks that learn particle-based simulation.",
         "tags": ["neural", "learning-based", "graph-networks", "simulation"],
-    },
-    {
-        "title": "Differentiable Simulation",
-        "kind": "concept",
-        "description": "Making a simulator's output differentiable w.r.t. its inputs/parameters, so gradients can drive learning or control.",
-        "tags": ["differentiable", "neural", "learning-based", "gradient"],
-    },
-    {
-        "title": "Neural / Learning-Based Simulation",
-        "kind": "concept",
-        "description": "Replacing or augmenting parts of a physics solver with a learned model (e.g. a graph network).",
-        "tags": ["neural", "learning-based", "simulation", "graph-networks"],
     },
 ]
