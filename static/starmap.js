@@ -18,23 +18,38 @@ const TAG_CATEGORIES = {
 };
 const TAG_CATEGORY_ORDER = Object.keys(TAG_CATEGORIES);
 
-// A star's map region: whichever curated category it has the most tags in
-// (ties go to the earlier category in TAG_CATEGORY_ORDER). Deterministic and
-// stable -- no clustering algorithm, so the same tags always land in the
-// same region.
-function primaryCategory(node) {
-  const counts = {};
+// "research methodology" holds descriptors of study *type* (review, dataset,
+// simulation, graphics, ...), not topic -- they shouldn't drive where a star
+// sits on the map at all, or Scintilla ([wildfire, simulation, graphics])
+// ends up anchored to "methodology" instead of wildfire just because 2 of
+// its 3 tags happen to live in that bucket. Excluded from region voting
+// entirely below; still a normal, filterable tag-filter category.
+const REGION_FALLBACK_CATEGORY = "research methodology";
+
+// A star's map region: whichever curated (non-methodology) category it has
+// the most *weighted* tag support in, where each tag's vote is worth
+// 1/frequency -- a rare, specific tag (e.g. "elasticity", used once)
+// outweighs several tags that show up on nearly every paper. A star whose
+// only categorized tags are methodology ones falls back to that category;
+// otherwise "other". Deterministic and stable either way -- no clustering
+// algorithm, so the same tags always land in the same region.
+function primaryCategory(node, freq) {
+  const weights = {};
   node.tags.forEach((t) => {
     const cat = TAG_CATEGORY_ORDER.find((c) => TAG_CATEGORIES[c].includes(t));
-    if (cat) counts[cat] = (counts[cat] || 0) + 1;
+    if (cat && cat !== REGION_FALLBACK_CATEGORY) {
+      weights[cat] = (weights[cat] || 0) + 1 / (freq[t] || 1);
+    }
   });
-  let best = "other";
-  let bestCount = 0;
+  let best = null;
+  let bestWeight = 0;
   TAG_CATEGORY_ORDER.forEach((c) => {
-    const n = counts[c] || 0;
-    if (n > bestCount) { best = c; bestCount = n; }
+    const w = weights[c] || 0;
+    if (w > bestWeight) { best = c; bestWeight = w; }
   });
-  return best;
+  if (best) return best;
+  if (node.tags.some((t) => TAG_CATEGORIES[REGION_FALLBACK_CATEGORY].includes(t))) return REGION_FALLBACK_CATEGORY;
+  return "other";
 }
 
 // Mastery is purely a brightness dimension now, not a hue -- a star's color
@@ -360,7 +375,7 @@ function renderStarmap() {
     n.degree = degreeById[n.id] || 0;
     n.radius = coreRadius(n.degree);
     n.hue = starHue(n, freq);
-    n.category = primaryCategory(n);
+    n.category = primaryCategory(n, freq);
   });
 
   // One radial gradient per star (color is per-star via its hue; only
